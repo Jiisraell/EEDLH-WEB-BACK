@@ -139,7 +139,7 @@ def crear_pedido(pedido: Pedido):
     pedido.fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     # Guardar en la "base de datos" temporal
-    pedidos_db.append(pedido.dict())
+    pedidos_db.append(pedido.model_dump())
 
     return pedido
 
