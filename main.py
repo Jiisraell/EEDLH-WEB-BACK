@@ -157,3 +157,6 @@ def obtener_pedido(pedido_id: int):
         if pedido["id"] == pedido_id:
             return pedido
     return {"error": "Pedido no encontrado"}
+
+
+handler = app
