@@ -289,7 +289,7 @@ def obtener_productos():
             "precio": 1.25,
             "stock": 30,
             "unidad": "kg",
-            "imagen": "img/Sandía.avif",
+            "imagen": "img/sandia.jpg",
             "descripcion": "Sandías jugosas y refrescantes"
         },
         {
