@@ -424,7 +424,7 @@ def enviar_email_pedido(pedido: Pedido):
         # Enviar email solo a ti
         params = {
             "from": "El Encanto de la Huerta <onboarding@resend.dev>",
-            "to": ["i2003bbibjbb@gmail.com"],  # Tu email verificado en Resend
+            "to": ["elencantodelahuertaa@gmail.com"],  # Tu email verificado en Resend
             "subject": f"Nuevo Pedido #{pedido.id} - {pedido.cliente_nombre}",
             "html": html_content,
         }
