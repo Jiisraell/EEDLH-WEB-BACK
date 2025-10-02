@@ -6,12 +6,20 @@ from typing import List, Optional
 from pydantic import BaseModel
 import resend
 import os
+from pymongo import MongoClient
+from bson import ObjectId
 
 # Crear la aplicación
 app = FastAPI(title="El Encanto de la Huerta API")
 
-# Configurar Resend (la API key la pondremos como variable de entorno)
+# Configurar Resend
 resend.api_key = os.environ.get("RESEND_API_KEY", "")
+
+# Configurar MongoDB
+MONGODB_URL = os.environ.get("MONGODB_URL", "")
+client = MongoClient(MONGODB_URL)
+db = client.eedlh_database
+pedidos_collection = db.pedidos
 
 # ===== CONFIGURAR CORS =====
 app.add_middleware(
@@ -28,12 +36,13 @@ app.add_middleware(
 def inicio():
     return {
         "mensaje": "Bienvenido a la API de El Encanto de la Huerta",
-        "version": "1.0",
-        "endpoints": ["/productos", "/docs"]
+        "version": "2.0",
+        "database": "MongoDB Atlas",
+        "endpoints": ["/productos", "/api/pedidos", "/docs"]
     }
 
 
-# Ruta para obtener productos CON IMÁGENES
+# Ruta para obtener productos
 @app.get("/productos")
 def obtener_productos():
     productos = [
@@ -331,10 +340,6 @@ def obtener_producto(producto_id: int):
     return {"error": "Producto no encontrado"}
 
 
-# Lista temporal para almacenar pedidos
-pedidos_db = []
-
-
 # Modelo para los items del pedido
 class ItemPedido(BaseModel):
     producto_id: int
@@ -360,7 +365,6 @@ class Pedido(BaseModel):
 # Función para enviar email
 def enviar_email_pedido(pedido: Pedido):
     try:
-        # Crear lista de productos HTML
         items_html = ""
         for item in pedido.items:
             subtotal = item.precio * item.cantidad
@@ -421,27 +425,32 @@ def enviar_email_pedido(pedido: Pedido):
         </html>
         """
 
-        # Enviar email solo a ti
         params = {
             "from": "El Encanto de la Huerta <onboarding@resend.dev>",
-            "to": ["elencantodelahuertaa@gmail.com"],  # Tu email verificado en Resend
+            "to": ["elencantodelahuertaa@gmail.com"],
             "subject": f"Nuevo Pedido #{pedido.id} - {pedido.cliente_nombre}",
             "html": html_content,
         }
 
         resend.Emails.send(params)
 
-        # COMENTADO: Email al cliente (hasta verificar dominio)
-        # Mientras tanto, puedes contactarlos manualmente por teléfono/WhatsApp
-
     except Exception as e:
         print(f"Error enviando email: {e}")
+
+
 # Endpoint para crear un nuevo pedido
-@app.post("/api/pedidos", response_model=Pedido)
+@app.post("/api/pedidos")
 def crear_pedido(pedido: Pedido):
-    pedido.id = len(pedidos_db) + 1
+    # Obtener el último ID de pedido
+    ultimo_pedido = pedidos_collection.find_one(sort=[("id", -1)])
+    nuevo_id = 1 if not ultimo_pedido else ultimo_pedido["id"] + 1
+
+    pedido.id = nuevo_id
     pedido.fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    pedidos_db.append(pedido.model_dump())
+
+    # Guardar en MongoDB
+    pedido_dict = pedido.model_dump()
+    pedidos_collection.insert_one(pedido_dict)
 
     # Enviar email de notificación
     enviar_email_pedido(pedido)
@@ -452,15 +461,16 @@ def crear_pedido(pedido: Pedido):
 # Endpoint para obtener todos los pedidos
 @app.get("/api/pedidos")
 def obtener_pedidos():
-    return pedidos_db
+    pedidos = list(pedidos_collection.find({}, {"_id": 0}))
+    return pedidos
 
 
 # Endpoint para obtener un pedido específico
 @app.get("/api/pedidos/{pedido_id}")
 def obtener_pedido(pedido_id: int):
-    for pedido in pedidos_db:
-        if pedido["id"] == pedido_id:
-            return pedido
+    pedido = pedidos_collection.find_one({"id": pedido_id}, {"_id": 0})
+    if pedido:
+        return pedido
     return {"error": "Pedido no encontrado"}
 
 
