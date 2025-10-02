@@ -1,12 +1,17 @@
 # main.py
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 from typing import List, Optional
 from pydantic import BaseModel
+import resend
+import os
 
 # Crear la aplicación
 app = FastAPI(title="El Encanto de la Huerta API")
+
+# Configurar Resend (la API key la pondremos como variable de entorno)
+resend.api_key = os.environ.get("RESEND_API_KEY", "")
 
 # ===== CONFIGURAR CORS =====
 app.add_middleware(
@@ -39,7 +44,7 @@ def obtener_productos():
             "precio": 2.25,
             "stock": 100,
             "unidad": "kg",
-            "imagen": "img/golden.webp",  # Añadir imágenes
+            "imagen": "img/golden.webp",
             "descripcion": "Manzanas dulces y crujientes de temporada"
         },
         {
@@ -49,7 +54,7 @@ def obtener_productos():
             "precio": 3.75,
             "stock": 100,
             "unidad": "kg",
-            "imagen": "img/pink_lady.webp",  # Añadir imágenes
+            "imagen": "img/pink_lady.webp",
             "descripcion": "Manzanas dulces y crujientes de temporada"
         },
         {
@@ -59,7 +64,7 @@ def obtener_productos():
             "precio": 2.95,
             "stock": 100,
             "unidad": "kg",
-            "imagen": "img/manzana_reineta.webp",  # Añadir imágenes
+            "imagen": "img/manzana_reineta.webp",
             "descripcion": "Manzanas dulces y crujientes de temporada"
         },
         {
@@ -69,7 +74,7 @@ def obtener_productos():
             "precio": 3.75,
             "stock": 100,
             "unidad": "kg",
-            "imagen": "img/ambrosia.webp",  # Añadir imágenes
+            "imagen": "img/ambrosia.webp",
             "descripcion": "Manzanas dulces y crujientes de temporada"
         },
         {
@@ -79,7 +84,7 @@ def obtener_productos():
             "precio": 2.85,
             "stock": 100,
             "unidad": "kg",
-            "imagen": "img/granny_smit.webp",  # Añadir imágenes
+            "imagen": "img/granny_smit.webp",
             "descripcion": "Manzanas dulces y crujientes de temporada"
         },
         {
@@ -99,7 +104,7 @@ def obtener_productos():
             "precio": 1.65,
             "stock": 100,
             "unidad": "kg",
-            "imagen": "img/naranja_zumo.jpg",  # Añadir imágenes
+            "imagen": "img/naranja_zumo.jpg",
             "descripcion": "Naranjas dulces y con mucho zumo de temporada"
         },
         {
@@ -191,7 +196,8 @@ def obtener_productos():
             "unidad": "ud",
             "imagen": "img/lechuga_romana.jpg",
             "descripcion": "Lechugas frescas recién cosechadas"
-        },{
+        },
+        {
             "id": 17,
             "nombre": "Lechuga Iceberg",
             "categoria": "verduras",
@@ -199,17 +205,17 @@ def obtener_productos():
             "stock": 90,
             "unidad": "kg",
             "imagen": "img/lechuga_icebrg.jpg",
-            "descripcion": "Tomates frescos de la huerta"
+            "descripcion": "Lechugas frescas de la huerta"
         },
         {
             "id": 18,
             "nombre": "Lechuga Corazones",
             "categoria": "verduras",
-            "precio": 1,
+            "precio": 1.00,
             "stock": 90,
             "unidad": "kg",
             "imagen": "img/corazon_lechuga.jpg",
-            "descripcion": "Tomates frescos de la huerta"
+            "descripcion": "Corazones de lechuga tiernos"
         },
         {
             "id": 19,
@@ -219,9 +225,8 @@ def obtener_productos():
             "stock": 90,
             "unidad": "kg",
             "imagen": "img/lechuga_roble.jpg",
-            "descripcion": "Tomates frescos de la huerta"
+            "descripcion": "Lechuga hoja de roble fresca"
         },
-
         {
             "id": 20,
             "nombre": "Fresas",
@@ -250,7 +255,7 @@ def obtener_productos():
             "stock": 80,
             "unidad": "kg",
             "imagen": "img/pimiento_verde.jpg",
-            "descripcion": "Pimientos rojos y verdes de la huerta"
+            "descripcion": "Pimientos verdes de la huerta"
         },
         {
             "id": 23,
@@ -260,7 +265,7 @@ def obtener_productos():
             "stock": 80,
             "unidad": "kg",
             "imagen": "img/pimiento_rojo.jpg",
-            "descripcion": "Pimientos rojos y verdes de la huerta"
+            "descripcion": "Pimientos rojos de la huerta"
         },
         {
             "id": 24,
@@ -270,7 +275,7 @@ def obtener_productos():
             "stock": 80,
             "unidad": "kg",
             "imagen": "img/pimiento_amarillo.jpg",
-            "descripcion": "Pimientos rojos y verdes de la huerta"
+            "descripcion": "Pimientos amarillos de la huerta"
         },
         {
             "id": 25,
@@ -289,7 +294,7 @@ def obtener_productos():
             "precio": 1.25,
             "stock": 30,
             "unidad": "kg",
-            "imagen": "img/sandia.jpg",
+            "imagen": "img/Sandía.avif",
             "descripcion": "Sandías jugosas y refrescantes"
         },
         {
@@ -312,7 +317,6 @@ def obtener_productos():
             "imagen": "img/melon.png",
             "descripcion": "Melón de cercanía, refrescante y crujiente"
         },
-
     ]
     return productos
 
@@ -321,11 +325,9 @@ def obtener_productos():
 @app.get("/productos/{producto_id}")
 def obtener_producto(producto_id: int):
     productos = obtener_productos()
-
     for producto in productos:
         if producto["id"] == producto_id:
             return producto
-
     return {"error": "Producto no encontrado"}
 
 
@@ -355,12 +357,125 @@ class Pedido(BaseModel):
     direccion_entrega: Optional[str] = None
 
 
+# Función para enviar email
+def enviar_email_pedido(pedido: Pedido):
+    try:
+        # Crear lista de productos HTML
+        items_html = ""
+        for item in pedido.items:
+            subtotal = item.precio * item.cantidad
+            items_html += f"""
+            <tr>
+                <td style="padding: 10px; border-bottom: 1px solid #eee;">{item.nombre}</td>
+                <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: center;">{item.cantidad}</td>
+                <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">{item.precio:.2f}€/{item.unidad}</td>
+                <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">{subtotal:.2f}€</td>
+            </tr>
+            """
+
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                <h2 style="color: #0b3d0b; border-bottom: 2px solid #0b3d0b; padding-bottom: 10px;">
+                    🛒 Nuevo Pedido #{pedido.id}
+                </h2>
+
+                <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                    <h3 style="margin-top: 0; color: #0b3d0b;">Datos del Cliente</h3>
+                    <p><strong>Nombre:</strong> {pedido.cliente_nombre}</p>
+                    <p><strong>Email:</strong> {pedido.cliente_email}</p>
+                    <p><strong>Teléfono:</strong> {pedido.cliente_telefono}</p>
+                    <p><strong>Dirección:</strong> {pedido.direccion_entrega}</p>
+                </div>
+
+                <h3 style="color: #0b3d0b;">Productos del Pedido</h3>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background-color: #0b3d0b; color: white;">
+                            <th style="padding: 10px; text-align: left;">Producto</th>
+                            <th style="padding: 10px; text-align: center;">Cantidad</th>
+                            <th style="padding: 10px; text-align: right;">Precio</th>
+                            <th style="padding: 10px; text-align: right;">Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {items_html}
+                    </tbody>
+                </table>
+
+                <div style="text-align: right; margin-top: 20px; padding: 15px; background-color: #e6f1e6; border-radius: 5px;">
+                    <h3 style="margin: 0; color: #0b3d0b;">TOTAL: {pedido.total:.2f}€</h3>
+                </div>
+
+                <div style="margin-top: 30px; padding: 15px; background-color: #fff3cd; border-left: 4px solid #ffc107;">
+                    <p style="margin: 0;"><strong>Fecha del pedido:</strong> {pedido.fecha}</p>
+                    <p style="margin: 5px 0 0 0;"><strong>Estado:</strong> {pedido.estado}</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+
+        # Enviar email a ti (dueño de la tienda)
+        params = {
+            "from": "El Encanto de la Huerta <onboarding@resend.dev>",
+            "to": ["elencantodelahuertaa@gmail.com"],  # TU EMAIL AQUÍ
+            "subject": f"Nuevo Pedido #{pedido.id} - {pedido.cliente_nombre}",
+            "html": html_content,
+        }
+
+        resend.Emails.send(params)
+
+        # Email de confirmación al cliente
+        html_cliente = f"""
+        <!DOCTYPE html>
+        <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                <h2 style="color: #0b3d0b;">¡Gracias por tu pedido!</h2>
+                <p>Hola {pedido.cliente_nombre},</p>
+                <p>Hemos recibido tu pedido correctamente. Tu número de pedido es: <strong>#{pedido.id}</strong></p>
+                <p>Te contactaremos pronto para confirmar la entrega.</p>
+                <p>Total del pedido: <strong>{pedido.total:.2f}€</strong></p>
+                <hr style="border: 1px solid #eee; margin: 20px 0;">
+                <p style="color: #666; font-size: 14px;">
+                    Si tienes alguna duda, contacta con nosotros:<br>
+                    📞 +34 610 994 703<br>
+                    📧 elencantodelahuertaa@gmail.com
+                </p>
+            </div>
+        </body>
+        </html>
+        """
+
+        params_cliente = {
+            "from": "El Encanto de la Huerta <onboarding@resend.dev>",
+            "to": [pedido.cliente_email],
+            "subject": f"Confirmación de Pedido #{pedido.id}",
+            "html": html_cliente,
+        }
+
+        resend.Emails.send(params_cliente)
+
+    except Exception as e:
+        print(f"Error enviando email: {e}")
+
+
 # Endpoint para crear un nuevo pedido
 @app.post("/api/pedidos", response_model=Pedido)
 def crear_pedido(pedido: Pedido):
     pedido.id = len(pedidos_db) + 1
     pedido.fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     pedidos_db.append(pedido.model_dump())
+
+    # Enviar email de notificación
+    enviar_email_pedido(pedido)
+
     return pedido
 
 
