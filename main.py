@@ -421,51 +421,21 @@ def enviar_email_pedido(pedido: Pedido):
         </html>
         """
 
-        # Enviar email a ti (dueño de la tienda)
+        # Enviar email solo a ti
         params = {
             "from": "El Encanto de la Huerta <onboarding@resend.dev>",
-            "to": ["elencantodelahuertaa@gmail.com"],  # TU EMAIL AQUÍ
+            "to": ["i2003bbibjbb@gmail.com"],  # Tu email verificado en Resend
             "subject": f"Nuevo Pedido #{pedido.id} - {pedido.cliente_nombre}",
             "html": html_content,
         }
 
         resend.Emails.send(params)
 
-        # Email de confirmación al cliente
-        html_cliente = f"""
-        <!DOCTYPE html>
-        <html>
-        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                <h2 style="color: #0b3d0b;">¡Gracias por tu pedido!</h2>
-                <p>Hola {pedido.cliente_nombre},</p>
-                <p>Hemos recibido tu pedido correctamente. Tu número de pedido es: <strong>#{pedido.id}</strong></p>
-                <p>Te contactaremos pronto para confirmar la entrega.</p>
-                <p>Total del pedido: <strong>{pedido.total:.2f}€</strong></p>
-                <hr style="border: 1px solid #eee; margin: 20px 0;">
-                <p style="color: #666; font-size: 14px;">
-                    Si tienes alguna duda, contacta con nosotros:<br>
-                    📞 +34 610 994 703<br>
-                    📧 elencantodelahuertaa@gmail.com
-                </p>
-            </div>
-        </body>
-        </html>
-        """
-
-        params_cliente = {
-            "from": "El Encanto de la Huerta <onboarding@resend.dev>",
-            "to": [pedido.cliente_email],
-            "subject": f"Confirmación de Pedido #{pedido.id}",
-            "html": html_cliente,
-        }
-
-        resend.Emails.send(params_cliente)
+        # COMENTADO: Email al cliente (hasta verificar dominio)
+        # Mientras tanto, puedes contactarlos manualmente por teléfono/WhatsApp
 
     except Exception as e:
         print(f"Error enviando email: {e}")
-
-
 # Endpoint para crear un nuevo pedido
 @app.post("/api/pedidos", response_model=Pedido)
 def crear_pedido(pedido: Pedido):
