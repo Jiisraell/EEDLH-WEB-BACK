@@ -294,7 +294,7 @@ def obtener_productos():
             "precio": 1.25,
             "stock": 30,
             "unidad": "kg",
-            "imagen": "img/Sandía.avif",
+            "imagen": "img/sandia.jpg",
             "descripcion": "Sandías jugosas y refrescantes"
         },
         {
@@ -424,7 +424,7 @@ def enviar_email_pedido(pedido: Pedido):
         # Enviar email solo a ti
         params = {
             "from": "El Encanto de la Huerta <onboarding@resend.dev>",
-            "to": ["elencantodelahuertaa@gmail.com"],  # Tu email verificado en Resend
+            "to": ["i2003bbibjbb@gmail.com"],  # Tu email verificado en Resend
             "subject": f"Nuevo Pedido #{pedido.id} - {pedido.cliente_nombre}",
             "html": html_content,
         }
