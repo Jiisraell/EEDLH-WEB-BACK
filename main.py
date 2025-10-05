@@ -10,6 +10,12 @@ from pymongo import MongoClient
 from bson import ObjectId
 import logging
 from dotenv import load_dotenv
+from passlib.context import CryptContext
+from jose import JWTError, jwt
+from datetime import timedelta
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi import Depends, status
+import secrets
 
 
 # Cargar variables de entorno desde .env
@@ -18,6 +24,29 @@ load_dotenv()
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Configurar seguridad para admin
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+security = HTTPBasic()
+
+ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
+SECRET_KEY = os.environ.get("SECRET_KEY", "clave-super-secreta-cambiar-en-produccion")
+
+
+def verificar_admin(credentials: HTTPBasicCredentials = Depends(security)):
+    """Verificar credenciales de admin"""
+    correct_username = secrets.compare_digest(credentials.username, ADMIN_USERNAME)
+    correct_password = secrets.compare_digest(credentials.password, ADMIN_PASSWORD)
+
+    if not (correct_username and correct_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciales incorrectas",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
+
 
 # Crear la aplicación
 app = FastAPI(title="El Encanto de la Huerta API")
@@ -655,5 +684,117 @@ def health_check():
         "resend": "ok" if resend_api_key else "not_configured"
     }
 
+
+# ===== ENDPOINTS DE ADMINISTRACIÓN =====
+
+@app.post("/api/admin/login")
+def admin_login(credentials: HTTPBasicCredentials = Depends(security)):
+    """Login de administrador"""
+    try:
+        admin = verificar_admin(credentials)
+        return {
+            "mensaje": "Login exitoso",
+            "usuario": admin,
+            "token": "authenticated"
+        }
+    except HTTPException as e:
+        raise e
+
+
+@app.put("/api/admin/pedidos/{pedido_id}/estado")
+def cambiar_estado_pedido(
+        pedido_id: int,
+        nuevo_estado: str,
+        admin: str = Depends(verificar_admin)
+):
+    """Cambiar estado de un pedido (solo admin)"""
+    try:
+        estados_validos = ["pendiente", "en_preparacion", "enviado", "entregado", "cancelado"]
+
+        if nuevo_estado not in estados_validos:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Estado inválido. Debe ser uno de: {', '.join(estados_validos)}"
+            )
+
+        if usar_mongodb:
+            try:
+                result = pedidos_collection.update_one(
+                    {"id": pedido_id},
+                    {"$set": {"estado": nuevo_estado}}
+                )
+                if result.modified_count == 0:
+                    raise HTTPException(status_code=404, detail="Pedido no encontrado")
+                logger.info(f"✅ Pedido #{pedido_id} actualizado a '{nuevo_estado}' por {admin}")
+            except Exception as e:
+                # Buscar en memoria
+                for pedido in pedidos_en_memoria:
+                    if pedido.get("id") == pedido_id:
+                        pedido["estado"] = nuevo_estado
+                        logger.info(f"✅ Pedido #{pedido_id} actualizado en memoria")
+                        return {"mensaje": "Estado actualizado", "pedido_id": pedido_id, "nuevo_estado": nuevo_estado}
+                raise HTTPException(status_code=404, detail="Pedido no encontrado")
+        else:
+            # Buscar en memoria
+            for pedido in pedidos_en_memoria:
+                if pedido.get("id") == pedido_id:
+                    pedido["estado"] = nuevo_estado
+                    logger.info(f"✅ Pedido #{pedido_id} actualizado en memoria")
+                    return {"mensaje": "Estado actualizado", "pedido_id": pedido_id, "nuevo_estado": nuevo_estado}
+            raise HTTPException(status_code=404, detail="Pedido no encontrado")
+
+        return {
+            "mensaje": "Estado actualizado exitosamente",
+            "pedido_id": pedido_id,
+            "nuevo_estado": nuevo_estado
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error actualizando pedido: {e}")
+        raise HTTPException(status_code=500, detail="Error al actualizar el pedido")
+
+
+@app.get("/api/admin/pedidos")
+def obtener_pedidos_admin(admin: str = Depends(verificar_admin)):
+    """Obtener todos los pedidos (solo admin)"""
+    return obtener_pedidos()
+
+
+@app.get("/api/admin/estadisticas")
+def obtener_estadisticas(admin: str = Depends(verificar_admin)):
+    """Obtener estadísticas de pedidos"""
+    try:
+        if usar_mongodb:
+            try:
+                pedidos = list(pedidos_collection.find({}, {"_id": 0}))
+            except:
+                pedidos = pedidos_en_memoria
+        else:
+            pedidos = pedidos_en_memoria
+
+        total_pedidos = len(pedidos)
+        total_ingresos = sum(p.get("total", 0) for p in pedidos)
+
+        estados = {}
+        for pedido in pedidos:
+            estado = pedido.get("estado", "pendiente")
+            estados[estado] = estados.get(estado, 0) + 1
+
+        return {
+            "total_pedidos": total_pedidos,
+            "total_ingresos": round(total_ingresos, 2),
+            "pedidos_por_estado": estados,
+            "pedido_promedio": round(total_ingresos / total_pedidos, 2) if total_pedidos > 0 else 0
+        }
+    except Exception as e:
+        logger.error(f"❌ Error obteniendo estadísticas: {e}")
+        return {
+            "total_pedidos": 0,
+            "total_ingresos": 0,
+            "pedidos_por_estado": {},
+            "pedido_promedio": 0
+        }
 
 handler = app
