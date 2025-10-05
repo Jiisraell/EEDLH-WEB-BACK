@@ -37,11 +37,20 @@ ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
 SECRET_KEY = os.environ.get("SECRET_KEY", "clave-super-secreta-cambiar-en-produccion")
 
+print(f"DEBUG: Username esperado: '{ADMIN_USERNAME}'")
+print(f"DEBUG: Password esperado: '{ADMIN_PASSWORD}'")
+
 
 def verificar_admin(credentials: HTTPBasicCredentials = Depends(security)):
     """Verificar credenciales de admin"""
+    print(f"DEBUG: Username recibido: '{credentials.username}'")
+    print(f"DEBUG: Password recibido: '{credentials.password}'")
+
     correct_username = secrets.compare_digest(credentials.username, ADMIN_USERNAME)
     correct_password = secrets.compare_digest(credentials.password, ADMIN_PASSWORD)
+
+    print(f"DEBUG: Username coincide: {correct_username}")
+    print(f"DEBUG: Password coincide: {correct_password}")
 
     if not (correct_username and correct_password):
         raise HTTPException(
@@ -50,7 +59,6 @@ def verificar_admin(credentials: HTTPBasicCredentials = Depends(security)):
             headers={"WWW-Authenticate": "Basic"},
         )
     return credentials.username
-
 
 # Crear la aplicación
 app = FastAPI(title="El Encanto de la Huerta API")
