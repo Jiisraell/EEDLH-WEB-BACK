@@ -51,7 +51,6 @@ try:
     logger.info("✅ Conexión a MongoDB exitosa")
 except Exception as e:
     logger.error(f"❌ Error conectando a MongoDB: {e}")
-    raise
 
 # ===== CONFIGURAR CORS =====
 app.add_middleware(
