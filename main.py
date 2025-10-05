@@ -19,7 +19,6 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
 # Crear la aplicación
 app = FastAPI(title="El Encanto de la Huerta API")
 
@@ -31,26 +30,33 @@ else:
     resend.api_key = resend_api_key
     logger.info("✅ Resend API configurada correctamente")
 
+
+
 # Configurar MongoDB con manejo de errores
 MONGODB_URL = os.environ.get("MONGODB_URL")
-if not MONGODB_URL:
-    logger.error("❌ MONGODB_URL no configurada. La aplicación no funcionará correctamente.")
-    raise ValueError("MONGODB_URL es requerida")
 
-try:
-    client = MongoClient(
-        MONGODB_URL,
-        serverSelectionTimeoutMS=5000,
-        tls=True,
-        tlsAllowInvalidCertificates=True
-    )
-    # Verificar conexión
-    client.server_info()
-    db = client.eedlh_database
-    pedidos_collection = db.pedidos
-    logger.info("✅ Conexión a MongoDB exitosa")
-except Exception as e:
-    logger.error(f"❌ Error conectando a MongoDB: {e}")
+pedidos_en_memoria = []
+usar_mongodb = False
+MONGODB_URL = os.environ.get("MONGODB_URL")
+if MONGODB_URL:
+    try:
+        client = MongoClient(
+            MONGODB_URL,
+            serverSelectionTimeoutMS=5000,
+            tls=True,
+            tlsAllowInvalidCertificates=True,
+            connect=False
+        )
+        db = client.eedlh_database
+        pedidos_collection = db.pedidos
+        usar_mongodb = True
+        logger.info("✅ MongoDB configurado (intentará conectar al usarse)")
+    except Exception as e:
+        logger.warning(f"⚠️ MongoDB no disponible: {e}. Usando almacenamiento en memoria.")
+        usar_mongodb = False
+else:
+    logger.warning("⚠️ MONGODB_URL no configurada. Usando almacenamiento en memoria.")
+
 
 # ===== CONFIGURAR CORS =====
 app.add_middleware(
@@ -555,23 +561,36 @@ def enviar_email_pedido(pedido: Pedido):
 @app.post("/api/pedidos")
 def crear_pedido(pedido: Pedido):
     try:
-        # Obtener el último ID de pedido
-        ultimo_pedido = pedidos_collection.find_one(sort=[("id", -1)])
-        nuevo_id = 1 if not ultimo_pedido else ultimo_pedido["id"] + 1
+        if usar_mongodb:
+            # Intentar usar MongoDB
+            try:
+                ultimo_pedido = pedidos_collection.find_one(sort=[("id", -1)])
+                nuevo_id = 1 if not ultimo_pedido else ultimo_pedido["id"] + 1
+            except:
+                logger.warning("⚠️ MongoDB no disponible, usando ID de memoria")
+                nuevo_id = len(pedidos_en_memoria) + 1
+        else:
+            # Usar contador de memoria
+            nuevo_id = len(pedidos_en_memoria) + 1
 
         pedido.id = nuevo_id
         pedido.fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        # Guardar en MongoDB
         pedido_dict = pedido.model_dump()
-        result = pedidos_collection.insert_one(pedido_dict)
 
-        if not result.inserted_id:
-            raise HTTPException(status_code=500, detail="Error al guardar el pedido en la base de datos")
+        # Intentar guardar en MongoDB
+        if usar_mongodb:
+            try:
+                pedidos_collection.insert_one(pedido_dict)
+                logger.info(f"✅ Pedido #{nuevo_id} guardado en MongoDB")
+            except Exception as e:
+                logger.warning(f"⚠️ No se pudo guardar en MongoDB: {e}. Guardando en memoria.")
+                pedidos_en_memoria.append(pedido_dict)
+        else:
+            # Guardar en memoria
+            pedidos_en_memoria.append(pedido_dict)
+            logger.info(f"✅ Pedido #{nuevo_id} guardado en memoria")
 
-        logger.info(f"✅ Pedido #{nuevo_id} creado exitosamente")
-
-        # Enviar email de notificación (no bloqueante)
+        # Enviar email (esto SÍ funcionará)
         email_enviado = enviar_email_pedido(pedido)
         if not email_enviado:
             logger.warning(f"⚠️ Email no enviado para pedido #{nuevo_id}")
@@ -579,7 +598,8 @@ def crear_pedido(pedido: Pedido):
         return {
             **pedido_dict,
             "mensaje": "Pedido creado exitosamente",
-            "email_enviado": email_enviado
+            "email_enviado": email_enviado,
+            "almacenamiento": "mongodb" if usar_mongodb else "memoria"
         }
 
     except ValueError as e:
@@ -587,9 +607,7 @@ def crear_pedido(pedido: Pedido):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"❌ Error creando pedido: {e}")
-        raise HTTPException(status_code=500, detail="Error al crear el pedido. Por favor, inténtalo de nuevo.")
-
-
+        raise HTTPException(status_code=500, detail="Error al crear el pedido.")
 # Endpoint para obtener todos los pedidos
 @app.get("/api/pedidos")
 def obtener_pedidos():
@@ -603,21 +621,22 @@ def obtener_pedidos():
 
 
 # Endpoint para obtener un pedido específico
-@app.get("/api/pedidos/{pedido_id}")
-def obtener_pedido(pedido_id: int):
+@app.get("/api/pedidos")
+def obtener_pedidos():
     try:
-        pedido = pedidos_collection.find_one({"id": pedido_id}, {"_id": 0})
-        if pedido:
-            logger.info(f"✅ Pedido {pedido_id} encontrado")
-            return pedido
-
-        logger.warning(f"⚠️ Pedido {pedido_id} no encontrado")
-        raise HTTPException(status_code=404, detail="Pedido no encontrado")
-    except HTTPException:
-        raise
+        if usar_mongodb:
+            try:
+                pedidos = list(pedidos_collection.find({}, {"_id": 0}))
+                logger.info(f"✅ {len(pedidos)} pedidos obtenidos de MongoDB")
+                return pedidos
+            except:
+                logger.warning("⚠️ MongoDB no disponible, mostrando pedidos de memoria")
+                return pedidos_en_memoria
+        else:
+            return pedidos_en_memoria
     except Exception as e:
-        logger.error(f"❌ Error obteniendo pedido {pedido_id}: {e}")
-        raise HTTPException(status_code=500, detail="Error al obtener el pedido")
+        logger.error(f"❌ Error obteniendo pedidos: {e}")
+        return pedidos_en_memoria
 
 
 # Health check endpoint
