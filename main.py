@@ -21,6 +21,10 @@ import secrets
 # Cargar variables de entorno desde .env
 load_dotenv()
 
+load_dotenv()
+print(f"DEBUG: ADMIN_USERNAME={os.environ.get('ADMIN_USERNAME')}")
+print(f"DEBUG: ADMIN_PASSWORD={os.environ.get('ADMIN_PASSWORD')}")
+
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
