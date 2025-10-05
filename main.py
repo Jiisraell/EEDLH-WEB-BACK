@@ -251,7 +251,7 @@ def obtener_productos():
                 "categoria": "verduras",
                 "precio": 1.35,
                 "stock": 90,
-                "unidad": "kg",
+                "unidad": "ud",
                 "imagen": "img/lechuga_icebrg.jpg",
                 "descripcion": "Lechugas frescas de la huerta"
             },
@@ -261,7 +261,7 @@ def obtener_productos():
                 "categoria": "verduras",
                 "precio": 1.00,
                 "stock": 90,
-                "unidad": "kg",
+                "unidad": "ud",
                 "imagen": "img/corazon_lechuga.jpg",
                 "descripcion": "Corazones de lechuga tiernos"
             },
@@ -271,7 +271,7 @@ def obtener_productos():
                 "categoria": "verduras",
                 "precio": 2.20,
                 "stock": 90,
-                "unidad": "kg",
+                "unidad": "ud",
                 "imagen": "img/lechuga_roble.jpg",
                 "descripcion": "Lechuga hoja de roble fresca"
             },
@@ -289,9 +289,9 @@ def obtener_productos():
                 "id": 21,
                 "nombre": "Aguacates",
                 "categoria": "frutas",
-                "precio": 4.20,
+                "precio": 2.25,
                 "stock": 45,
-                "unidad": "kg",
+                "unidad": "ud",
                 "imagen": "img/aguacate.webp",
                 "descripcion": "Aguacates cremosos perfectos para ensaladas"
             },
@@ -299,9 +299,9 @@ def obtener_productos():
                 "id": 22,
                 "nombre": "Pimiento Verde",
                 "categoria": "verduras",
-                "precio": 2.85,
+                "precio": 1.10,
                 "stock": 80,
-                "unidad": "kg",
+                "unidad": "ud",
                 "imagen": "img/pimiento_verde.jpg",
                 "descripcion": "Pimientos verdes de la huerta"
             },
@@ -309,9 +309,9 @@ def obtener_productos():
                 "id": 23,
                 "nombre": "Pimiento Rojo",
                 "categoria": "verduras",
-                "precio": 3.25,
+                "precio": 1.10,
                 "stock": 80,
-                "unidad": "kg",
+                "unidad": "ud",
                 "imagen": "img/pimiento_rojo.jpg",
                 "descripcion": "Pimientos rojos de la huerta"
             },
@@ -319,9 +319,9 @@ def obtener_productos():
                 "id": 24,
                 "nombre": "Pimiento Amarillo",
                 "categoria": "verduras",
-                "precio": 2.80,
+                "precio": 1.85,
                 "stock": 80,
-                "unidad": "kg",
+                "unidad": "ud",
                 "imagen": "img/pimiento_amarillo.jpg",
                 "descripcion": "Pimientos amarillos de la huerta"
             },
@@ -337,7 +337,7 @@ def obtener_productos():
             },
             {
                 "id": 26,
-                "nombre": "Sandías",
+                "nombre": "Sandías (7kg aprx)",
                 "categoria": "frutas",
                 "precio": 1.25,
                 "stock": 30,
@@ -347,7 +347,7 @@ def obtener_productos():
             },
             {
                 "id": 27,
-                "nombre": "Melón bollo",
+                "nombre": "Melón bollo (5kg aprx)",
                 "categoria": "frutas",
                 "precio": 4.25,
                 "stock": 30,
@@ -357,7 +357,7 @@ def obtener_productos():
             },
             {
                 "id": 28,
-                "nombre": "Melón Terreno",
+                "nombre": "Melón Terreno (5kg aprx)",
                 "categoria": "frutas",
                 "precio": 2.50,
                 "stock": 30,
