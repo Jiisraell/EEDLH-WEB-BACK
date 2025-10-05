@@ -38,7 +38,12 @@ if not MONGODB_URL:
     raise ValueError("MONGODB_URL es requerida")
 
 try:
-    client = MongoClient(MONGODB_URL, serverSelectionTimeoutMS=5000)
+    client = MongoClient(
+        MONGODB_URL,
+        serverSelectionTimeoutMS=5000,
+        tls=True,
+        tlsAllowInvalidCertificates=True
+    )
     # Verificar conexión
     client.server_info()
     db = client.eedlh_database
