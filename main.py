@@ -19,13 +19,8 @@ import secrets
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-
-
 # Cargar variables de entorno desde .env
 load_dotenv()
-
-load_dotenv()
-
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -39,14 +34,10 @@ ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
 SECRET_KEY = os.environ.get("SECRET_KEY", "clave-super-secreta-cambiar-en-produccion")
 
-
-
 def verificar_admin(credentials: HTTPBasicCredentials = Depends(security)):
     """Verificar credenciales de admin"""
-
     correct_username = secrets.compare_digest(credentials.username, ADMIN_USERNAME)
     correct_password = secrets.compare_digest(credentials.password, ADMIN_PASSWORD)
-
 
     if not (correct_username and correct_password):
         raise HTTPException(
@@ -66,7 +57,6 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 async def admin_panel():
     return FileResponse("static/admin.html")
 
-
 # Configurar Resend con manejo de errores
 resend_api_key = os.environ.get("RESEND_API_KEY")
 if not resend_api_key:
@@ -75,14 +65,11 @@ else:
     resend.api_key = resend_api_key
     logger.info("✅ Resend API configurada correctamente")
 
-
-
 # Configurar MongoDB con manejo de errores
-MONGODB_URL = os.environ.get("MONGODB_URL")
-
 pedidos_en_memoria = []
 usar_mongodb = False
 MONGODB_URL = os.environ.get("MONGODB_URL")
+
 if MONGODB_URL:
     try:
         client = MongoClient(
@@ -102,7 +89,6 @@ if MONGODB_URL:
 else:
     logger.warning("⚠️ MONGODB_URL no configurada. Usando almacenamiento en memoria.")
 
-
 # ===== CONFIGURAR CORS =====
 app.add_middleware(
     CORSMiddleware,
@@ -112,18 +98,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 # Ruta principal
 @app.get("/")
 def inicio():
     return {
         "mensaje": "Bienvenido a la API de El Encanto de la Huerta",
-        "version": "2.1",
-        "database": "MongoDB Atlas",
+        "version": "2.2",
+        "database": "MongoDB Atlas" if usar_mongodb else "Memoria",
         "endpoints": ["/productos", "/api/pedidos", "/docs"],
         "status": "online"
     }
-
 
 # Ruta para obtener productos
 @app.get("/productos")
@@ -417,7 +401,6 @@ def obtener_productos():
         logger.error(f"❌ Error obteniendo productos: {e}")
         raise HTTPException(status_code=500, detail="Error al obtener productos")
 
-
 # Ruta para obtener UN producto específico
 @app.get("/productos/{producto_id}")
 def obtener_producto(producto_id: int):
@@ -435,7 +418,6 @@ def obtener_producto(producto_id: int):
     except Exception as e:
         logger.error(f"❌ Error obteniendo producto {producto_id}: {e}")
         raise HTTPException(status_code=500, detail="Error al obtener el producto")
-
 
 # Modelo para los items del pedido
 class ItemPedido(BaseModel):
@@ -458,7 +440,6 @@ class ItemPedido(BaseModel):
         if v <= 0:
             raise ValueError('El precio debe ser mayor a 0')
         return v
-
 
 # Modelo para el pedido completo con validaciones mejoradas
 class Pedido(BaseModel):
@@ -483,10 +464,7 @@ class Pedido(BaseModel):
 
     @validator('cliente_telefono')
     def validar_telefono(cls, v):
-        # Eliminar espacios y caracteres especiales
         v = v.strip().replace(' ', '').replace('-', '').replace('+', '')
-
-        # Validar que tenga entre 9 y 15 dígitos
         if not v.isdigit():
             raise ValueError('El teléfono debe contener solo números')
         if len(v) < 9 or len(v) > 15:
@@ -517,7 +495,6 @@ class Pedido(BaseModel):
         if v > 10000:
             raise ValueError('El total máximo es 10000€')
         return v
-
 
 # Función para enviar email con manejo de errores
 def enviar_email_pedido(pedido: Pedido):
@@ -601,13 +578,11 @@ def enviar_email_pedido(pedido: Pedido):
         logger.error(f"❌ Error enviando email para pedido #{pedido.id}: {e}")
         return False
 
-
 # Endpoint para crear un nuevo pedido con mejor manejo de errores
 @app.post("/api/pedidos")
 def crear_pedido(pedido: Pedido):
     try:
         if usar_mongodb:
-            # Intentar usar MongoDB
             try:
                 ultimo_pedido = pedidos_collection.find_one(sort=[("id", -1)])
                 nuevo_id = 1 if not ultimo_pedido else ultimo_pedido["id"] + 1
@@ -615,7 +590,6 @@ def crear_pedido(pedido: Pedido):
                 logger.warning("⚠️ MongoDB no disponible, usando ID de memoria")
                 nuevo_id = len(pedidos_en_memoria) + 1
         else:
-            # Usar contador de memoria
             nuevo_id = len(pedidos_en_memoria) + 1
 
         pedido.id = nuevo_id
@@ -631,11 +605,10 @@ def crear_pedido(pedido: Pedido):
                 logger.warning(f"⚠️ No se pudo guardar en MongoDB: {e}. Guardando en memoria.")
                 pedidos_en_memoria.append(pedido_dict)
         else:
-            # Guardar en memoria
             pedidos_en_memoria.append(pedido_dict)
             logger.info(f"✅ Pedido #{nuevo_id} guardado en memoria")
 
-        # Enviar email (esto SÍ funcionará)
+        # Enviar email
         email_enviado = enviar_email_pedido(pedido)
         if not email_enviado:
             logger.warning(f"⚠️ Email no enviado para pedido #{nuevo_id}")
@@ -653,19 +626,8 @@ def crear_pedido(pedido: Pedido):
     except Exception as e:
         logger.error(f"❌ Error creando pedido: {e}")
         raise HTTPException(status_code=500, detail="Error al crear el pedido.")
+
 # Endpoint para obtener todos los pedidos
-@app.get("/api/pedidos")
-def obtener_pedidos():
-    try:
-        pedidos = list(pedidos_collection.find({}, {"_id": 0}))
-        logger.info(f"✅ {len(pedidos)} pedidos obtenidos")
-        return pedidos
-    except Exception as e:
-        logger.error(f"❌ Error obteniendo pedidos: {e}")
-        raise HTTPException(status_code=500, detail="Error al obtener los pedidos")
-
-
-# Endpoint para obtener un pedido específico
 @app.get("/api/pedidos")
 def obtener_pedidos():
     try:
@@ -683,12 +645,10 @@ def obtener_pedidos():
         logger.error(f"❌ Error obteniendo pedidos: {e}")
         return pedidos_en_memoria
 
-
 # Health check endpoint
 @app.get("/health")
 def health_check():
     try:
-        # Verificar MongoDB
         client.server_info()
         mongodb_status = "ok"
     except:
@@ -699,7 +659,6 @@ def health_check():
         "mongodb": mongodb_status,
         "resend": "ok" if resend_api_key else "not_configured"
     }
-
 
 # ===== ENDPOINTS DE ADMINISTRACIÓN =====
 
@@ -716,15 +675,14 @@ def admin_login(credentials: HTTPBasicCredentials = Depends(security)):
     except HTTPException as e:
         raise e
 
-
-# Agregar este modelo antes del endpoint
+# Modelo para cambio de estado
 class CambioEstado(BaseModel):
     nuevo_estado: str
 
 @app.put("/api/admin/pedidos/{pedido_id}/estado")
 def cambiar_estado_pedido(
         pedido_id: int,
-        cambio: CambioEstado,  # ✅ Ahora usa el modelo
+        cambio: CambioEstado,
         admin: str = Depends(verificar_admin)
 ):
     """Cambiar estado de un pedido (solo admin)"""
@@ -747,7 +705,6 @@ def cambiar_estado_pedido(
                     raise HTTPException(status_code=404, detail="Pedido no encontrado")
                 logger.info(f"✅ Pedido #{pedido_id} actualizado a '{cambio.nuevo_estado}' por {admin}")
             except Exception as e:
-                # Buscar en memoria
                 for pedido in pedidos_en_memoria:
                     if pedido.get("id") == pedido_id:
                         pedido["estado"] = cambio.nuevo_estado
@@ -755,7 +712,6 @@ def cambiar_estado_pedido(
                         return {"mensaje": "Estado actualizado", "pedido_id": pedido_id, "nuevo_estado": cambio.nuevo_estado}
                 raise HTTPException(status_code=404, detail="Pedido no encontrado")
         else:
-            # Buscar en memoria
             for pedido in pedidos_en_memoria:
                 if pedido.get("id") == pedido_id:
                     pedido["estado"] = cambio.nuevo_estado
@@ -775,24 +731,10 @@ def cambiar_estado_pedido(
         logger.error(f"❌ Error actualizando pedido: {e}")
         raise HTTPException(status_code=500, detail="Error al actualizar el pedido")
 
-        return {
-            "mensaje": "Estado actualizado exitosamente",
-            "pedido_id": pedido_id,
-            "nuevo_estado": nuevo_estado
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ Error actualizando pedido: {e}")
-        raise HTTPException(status_code=500, detail="Error al actualizar el pedido")
-
-
 @app.get("/api/admin/pedidos")
 def obtener_pedidos_admin(admin: str = Depends(verificar_admin)):
     """Obtener todos los pedidos (solo admin)"""
     return obtener_pedidos()
-
 
 @app.get("/api/admin/estadisticas")
 def obtener_estadisticas(admin: str = Depends(verificar_admin)):
