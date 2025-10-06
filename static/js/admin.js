@@ -1,4 +1,4 @@
-// js/admin.js
+
 
 const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? 'http://localhost:8000'
@@ -10,11 +10,11 @@ let todosPedidos = [];
 // Login
 document.getElementById('login-form').addEventListener('submit', async (e) => {
   e.preventDefault();
-  
+
   const username = document.getElementById('username').value;
   const password = document.getElementById('password').value;
   const errorDiv = document.getElementById('login-error');
-  
+
   try {
     const response = await fetch(`${API_URL}/api/admin/login`, {
       method: 'POST',
@@ -22,25 +22,22 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
         'Authorization': 'Basic ' + btoa(`${username}:${password}`)
       }
     });
-    
+
     if (!response.ok) {
       throw new Error('Credenciales incorrectas');
     }
-    
+
     const data = await response.json();
-    
-    // Guardar credenciales
+
     credenciales = btoa(`${username}:${password}`);
     sessionStorage.setItem('admin_auth', credenciales);
-    
-    // Mostrar panel
+
     document.getElementById('login-section').style.display = 'none';
     document.getElementById('admin-panel').style.display = 'block';
-    
-    // Cargar datos
+
     cargarEstadisticas();
     cargarPedidos();
-    
+
   } catch (error) {
     errorDiv.textContent = 'Usuario o contraseña incorrectos';
     errorDiv.classList.remove('d-none');
@@ -77,16 +74,16 @@ async function cargarEstadisticas() {
         'Authorization': 'Basic ' + credenciales
       }
     });
-    
+
     if (!response.ok) throw new Error('Error al cargar estadísticas');
-    
+
     const stats = await response.json();
-    
+
     document.getElementById('stat-total').textContent = stats.total_pedidos;
     document.getElementById('stat-ingresos').textContent = stats.total_ingresos.toFixed(2) + '€';
     document.getElementById('stat-pendientes').textContent = stats.pedidos_por_estado.pendiente || 0;
     document.getElementById('stat-promedio').textContent = stats.pedido_promedio.toFixed(2) + '€';
-    
+
   } catch (error) {
     console.error('Error cargando estadísticas:', error);
   }
@@ -100,12 +97,12 @@ async function cargarPedidos() {
         'Authorization': 'Basic ' + credenciales
       }
     });
-    
+
     if (!response.ok) throw new Error('Error al cargar pedidos');
-    
+
     todosPedidos = await response.json();
     mostrarPedidos(todosPedidos);
-    
+
   } catch (error) {
     console.error('Error cargando pedidos:', error);
     document.getElementById('pedidos-tbody').innerHTML = `
@@ -121,7 +118,7 @@ async function cargarPedidos() {
 // Mostrar pedidos en tabla
 function mostrarPedidos(pedidos) {
   const tbody = document.getElementById('pedidos-tbody');
-  
+
   if (pedidos.length === 0) {
     tbody.innerHTML = `
       <tr>
@@ -132,10 +129,9 @@ function mostrarPedidos(pedidos) {
     `;
     return;
   }
-  
-  // Ordenar por ID descendente (más recientes primero)
+
   pedidos.sort((a, b) => b.id - a.id);
-  
+
   tbody.innerHTML = pedidos.map(pedido => `
     <tr>
       <td><strong>#${pedido.id}</strong></td>
@@ -151,11 +147,14 @@ function mostrarPedidos(pedidos) {
         </span>
       </td>
       <td>
-        <button class="btn btn-sm btn-outline-primary" onclick="verDetalles(${pedido.id})">
+        <button class="btn btn-sm btn-outline-primary" onclick="verDetalles(${pedido.id})" title="Ver detalles">
           <i class="bi bi-eye"></i>
         </button>
-        <button class="btn btn-sm btn-outline-success" onclick="cambiarEstado(${pedido.id}, '${pedido.estado}')">
+        <button class="btn btn-sm btn-outline-success" onclick="cambiarEstado(${pedido.id}, '${pedido.estado}')" title="Cambiar estado">
           <i class="bi bi-pencil"></i>
+        </button>
+        <button class="btn btn-sm btn-outline-warning" onclick="editarPrecio(${pedido.id}, ${pedido.total})" title="Editar precio">
+          <i class="bi bi-currency-euro"></i>
         </button>
       </td>
     </tr>
@@ -178,9 +177,9 @@ function formatearEstado(estado) {
 function verDetalles(pedidoId) {
   const pedido = todosPedidos.find(p => p.id === pedidoId);
   if (!pedido) return;
-  
+
   document.getElementById('modal-pedido-id').textContent = pedido.id;
-  
+
   const itemsHtml = pedido.items.map(item => `
     <tr>
       <td>${item.nombre}</td>
@@ -189,7 +188,7 @@ function verDetalles(pedidoId) {
       <td class="text-end"><strong>${(item.precio * item.cantidad).toFixed(2)}€</strong></td>
     </tr>
   `).join('');
-  
+
   document.getElementById('modal-body-content').innerHTML = `
     <div class="row mb-3">
       <div class="col-md-6">
@@ -202,14 +201,14 @@ function verDetalles(pedidoId) {
       <div class="col-md-6">
         <h6 class="text-muted">Información del Pedido</h6>
         <p class="mb-1"><strong>Fecha:</strong> ${pedido.fecha}</p>
-        <p class="mb-1"><strong>Estado:</strong> 
+        <p class="mb-1"><strong>Estado:</strong>
           <span class="badge badge-estado estado-${pedido.estado}">
             ${formatearEstado(pedido.estado)}
           </span>
         </p>
       </div>
     </div>
-    
+
     <h6 class="text-muted mb-3">Productos</h6>
     <table class="table table-sm">
       <thead>
@@ -231,7 +230,7 @@ function verDetalles(pedidoId) {
       </tfoot>
     </table>
   `;
-  
+
   const modal = new bootstrap.Modal(document.getElementById('modalDetalles'));
   modal.show();
 }
@@ -245,15 +244,11 @@ async function cambiarEstado(pedidoId, estadoActual) {
     { value: 'entregado', label: 'Entregado' },
     { value: 'cancelado', label: 'Cancelado' }
   ];
-  
-  const opciones = estados.map(e => 
-    `<option value="${e.value}" ${e.value === estadoActual ? 'selected' : ''}>${e.label}</option>`
-  ).join('');
-  
+
   const nuevoEstado = prompt(`Cambiar estado del pedido #${pedidoId}:\n\nSelecciona:\n1 - Pendiente\n2 - En Preparación\n3 - Enviado\n4 - Entregado\n5 - Cancelado\n\nEscribe el número:`, '');
-  
+
   if (!nuevoEstado) return;
-  
+
   const mapeo = {
     '1': 'pendiente',
     '2': 'en_preparacion',
@@ -261,14 +256,14 @@ async function cambiarEstado(pedidoId, estadoActual) {
     '4': 'entregado',
     '5': 'cancelado'
   };
-  
+
   const estadoSeleccionado = mapeo[nuevoEstado];
-  
+
   if (!estadoSeleccionado) {
     alert('Opción inválida');
     return;
   }
-  
+
   try {
     const response = await fetch(`${API_URL}/api/admin/pedidos/${pedidoId}/estado`, {
       method: 'PUT',
@@ -278,18 +273,73 @@ async function cambiarEstado(pedidoId, estadoActual) {
       },
       body: JSON.stringify({ nuevo_estado: estadoSeleccionado })
     });
-    
+
     if (!response.ok) throw new Error('Error al cambiar estado');
-    
-    // Recargar pedidos y estadísticas
+
     await cargarPedidos();
     await cargarEstadisticas();
-    
+
     alert(`Estado actualizado a: ${formatearEstado(estadoSeleccionado)}`);
-    
+
   } catch (error) {
     console.error('Error:', error);
     alert('Error al cambiar el estado. Por favor, intenta de nuevo.');
+  }
+}
+
+// NUEVA FUNCIÓN: Editar precio del pedido
+async function editarPrecio(pedidoId, precioActual) {
+  const nuevoPrecio = prompt(
+    `Editar precio del pedido #${pedidoId}\n\n` +
+    `Precio actual: ${precioActual.toFixed(2)}€\n\n` +
+    `Introduce el nuevo precio total (ejemplo: 25.50):`,
+    precioActual.toFixed(2)
+  );
+
+  if (!nuevoPrecio) return;
+
+  const precioFloat = parseFloat(nuevoPrecio);
+
+  if (isNaN(precioFloat) || precioFloat <= 0) {
+    alert('Precio inválido. Debe ser un número mayor a 0.');
+    return;
+  }
+
+  if (precioFloat > 10000) {
+    alert('El precio máximo es 10000€');
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_URL}/api/admin/pedidos/${pedidoId}/precio`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': 'Basic ' + credenciales,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ nuevo_total: precioFloat })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Error al cambiar precio');
+    }
+
+    const resultado = await response.json();
+
+    await cargarPedidos();
+    await cargarEstadisticas();
+
+    alert(
+      `✅ Precio actualizado correctamente\n\n` +
+      `Pedido #${pedidoId}\n` +
+      `Precio anterior: ${resultado.precio_anterior.toFixed(2)}€\n` +
+      `Precio nuevo: ${resultado.nuevo_total.toFixed(2)}€`
+    );
+
+  } catch (error) {
+    console.error('Error:', error);
+    alert('Error al cambiar el precio: ' + error.message);
   }
 }
 
@@ -305,15 +355,13 @@ document.getElementById('buscar-pedido').addEventListener('input', (e) => {
 function filtrarPedidos() {
   const estadoFiltro = document.getElementById('filtro-estado').value;
   const busqueda = document.getElementById('buscar-pedido').value.toLowerCase();
-  
+
   let pedidosFiltrados = [...todosPedidos];
-  
-  // Filtrar por estado
+
   if (estadoFiltro !== 'todos') {
     pedidosFiltrados = pedidosFiltrados.filter(p => p.estado === estadoFiltro);
   }
-  
-  // Filtrar por búsqueda
+
   if (busqueda) {
     pedidosFiltrados = pedidosFiltrados.filter(p => 
       p.id.toString().includes(busqueda) ||

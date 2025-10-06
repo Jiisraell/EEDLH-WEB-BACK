@@ -262,8 +262,11 @@ class Pedido(BaseModel):
 
 
 def enviar_email_pedido(pedido: Pedido):
+    """Enviar email de confirmación del pedido"""
     if not resend_api_key:
+        logger.warning("⚠️ Email no enviado: RESEND_API_KEY no configurada")
         return False
+
     try:
         items_html = ""
         for item in pedido.items:
@@ -280,60 +283,90 @@ def enviar_email_pedido(pedido: Pedido):
         html_content = f"""
         <!DOCTYPE html>
         <html>
+        <head>
+            <meta charset="UTF-8">
+        </head>
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
             <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                <h2 style="color: #0b3d0b;">🛒 Nuevo Pedido #{pedido.id}</h2>
+                <h2 style="color: #0b3d0b; border-bottom: 2px solid #0b3d0b; padding-bottom: 10px;">
+                    🛒 Nuevo Pedido #{pedido.id}
+                </h2>
+
                 <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                    <h3 style="color: #0b3d0b;">Datos del Cliente</h3>
+                    <h3 style="margin-top: 0; color: #0b3d0b;">Datos del Cliente</h3>
                     <p><strong>Nombre:</strong> {pedido.cliente_nombre}</p>
                     <p><strong>Email:</strong> {pedido.cliente_email}</p>
                     <p><strong>Teléfono:</strong> {pedido.cliente_telefono}</p>
                     <p><strong>Dirección:</strong> {pedido.direccion_entrega}</p>
                 </div>
-                <h3 style="color: #0b3d0b;">Productos</h3>
+
+                <h3 style="color: #0b3d0b;">Productos del Pedido</h3>
                 <table style="width: 100%; border-collapse: collapse;">
                     <thead>
                         <tr style="background-color: #0b3d0b; color: white;">
-                            <th style="padding: 10px;">Producto</th>
-                            <th style="padding: 10px;">Cantidad</th>
-                            <th style="padding: 10px;">Precio</th>
-                            <th style="padding: 10px;">Subtotal</th>
+                            <th style="padding: 10px; text-align: left;">Producto</th>
+                            <th style="padding: 10px; text-align: center;">Cantidad</th>
+                            <th style="padding: 10px; text-align: right;">Precio</th>
+                            <th style="padding: 10px; text-align: right;">Subtotal</th>
                         </tr>
                     </thead>
-                    <tbody>{items_html}</tbody>
+                    <tbody>
+                        {items_html}
+                    </tbody>
                 </table>
-                <div style="text-align: right; margin-top: 20px; padding: 15px; background-color: #e6f1e6;">
-                    <h3 style="color: #0b3d0b;">TOTAL: {pedido.total:.2f}€</h3>
+
+                <div style="text-align: right; margin-top: 20px; padding: 15px; background-color: #e6f1e6; border-radius: 5px;">
+                    <h3 style="margin: 0; color: #0b3d0b;">TOTAL: {pedido.total:.2f}€</h3>
+                </div>
+
+                <div style="margin-top: 30px; padding: 15px; background-color: #fff3cd; border-left: 4px solid #ffc107;">
+                    <p style="margin: 0;"><strong>Fecha del pedido:</strong> {pedido.fecha}</p>
+                    <p style="margin: 5px 0 0 0;"><strong>Estado:</strong> {pedido.estado}</p>
                 </div>
             </div>
         </body>
         </html>
         """
 
-        resend.Emails.send({
+        params = {
             "from": "El Encanto de la Huerta <onboarding@resend.dev>",
             "to": ["elencantodelahuertaa@gmail.com"],
             "subject": f"Nuevo Pedido #{pedido.id} - {pedido.cliente_nombre}",
             "html": html_content,
-        })
-        logger.info(f"✅ Email enviado para pedido #{pedido.id}")
+        }
+
+        resend.Emails.send(params)
+        logger.info(f"✅ Email enviado correctamente para pedido #{pedido.id}")
         return True
+
     except Exception as e:
-        logger.error(f"❌ Error enviando email: {e}")
+        logger.error(f"❌ Error enviando email para pedido #{pedido.id}: {e}")
         return False
 
 
 @app.post("/api/pedidos")
 def crear_pedido(pedido: Pedido):
+    """Crear un nuevo pedido y guardarlo en memoria"""
     try:
+        # Generar nuevo ID secuencial
         nuevo_id = len(pedidos_en_memoria) + 1
+
         pedido.id = nuevo_id
         pedido.fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+        # Convertir el pedido a diccionario
         pedido_dict = {
             "id": pedido.id,
-            "items": [{"producto_id": item.producto_id, "nombre": item.nombre, "precio": item.precio,
-                       "cantidad": item.cantidad, "unidad": item.unidad} for item in pedido.items],
+            "items": [
+                {
+                    "producto_id": item.producto_id,
+                    "nombre": item.nombre,
+                    "precio": item.precio,
+                    "cantidad": item.cantidad,
+                    "unidad": item.unidad
+                }
+                for item in pedido.items
+            ],
             "total": pedido.total,
             "fecha": pedido.fecha,
             "estado": pedido.estado,
@@ -343,23 +376,43 @@ def crear_pedido(pedido: Pedido):
             "direccion_entrega": pedido.direccion_entrega
         }
 
+        # Guardar en memoria
         pedidos_en_memoria.append(pedido_dict)
-        logger.info(f"✅ Pedido #{nuevo_id} guardado. Total: {len(pedidos_en_memoria)}")
+        logger.info(f"✅ Pedido #{nuevo_id} guardado en memoria. Total pedidos: {len(pedidos_en_memoria)}")
 
+        # Enviar email de confirmación
         email_enviado = enviar_email_pedido(pedido)
+        if not email_enviado:
+            logger.warning(f"⚠️ Email no enviado para pedido #{nuevo_id}")
 
-        return {**pedido_dict, "mensaje": "Pedido creado exitosamente", "email_enviado": email_enviado}
+        return {
+            **pedido_dict,
+            "mensaje": "Pedido creado exitosamente",
+            "email_enviado": email_enviado,
+            "almacenamiento": "memoria"
+        }
+
     except ValueError as e:
+        logger.error(f"❌ Error de validación: {e}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"❌ Error: {e}")
+        logger.error(f"❌ Error creando pedido: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail="Error al crear el pedido")
 
 
 @app.get("/api/pedidos")
 def obtener_pedidos():
-    logger.info(f"📋 Devolviendo {len(pedidos_en_memoria)} pedidos")
-    return pedidos_en_memoria
+    """Obtener todos los pedidos almacenados en memoria"""
+    try:
+        logger.info(f"📋 Devolviendo {len(pedidos_en_memoria)} pedidos de memoria")
+        return pedidos_en_memoria
+    except Exception as e:
+        logger.error(f"❌ Error obteniendo pedidos: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return []
 
 
 @app.get("/health")
@@ -372,50 +425,126 @@ def health_check():
     }
 
 
-# ADMIN
+# ===== ENDPOINTS DE ADMINISTRACIÓN =====
+
 @app.post("/api/admin/login")
 def admin_login(credentials: HTTPBasicCredentials = Depends(security)):
-    admin = verificar_admin(credentials)
-    return {"mensaje": "Login exitoso", "usuario": admin, "token": "authenticated"}
+    """Login de administrador con autenticación básica"""
+    try:
+        admin = verificar_admin(credentials)
+        return {
+            "mensaje": "Login exitoso",
+            "usuario": admin,
+            "token": "authenticated"
+        }
+    except HTTPException as e:
+        raise e
 
 
+# Modelo para cambio de estado
 class CambioEstado(BaseModel):
     nuevo_estado: str
 
 
+# Modelo para cambio de precio
+class CambioPrecio(BaseModel):
+    nuevo_total: float
+
+    @validator('nuevo_total')
+    def validar_nuevo_total(cls, v):
+        if v <= 0:
+            raise ValueError('El total debe ser mayor a 0')
+        if v > 10000:
+            raise ValueError('El total máximo es 10000€')
+        return v
+
+
 @app.put("/api/admin/pedidos/{pedido_id}/estado")
-def cambiar_estado_pedido(pedido_id: int, cambio: CambioEstado, admin: str = Depends(verificar_admin)):
+def cambiar_estado_pedido(
+        pedido_id: int,
+        cambio: CambioEstado,
+        admin: str = Depends(verificar_admin)
+):
+    """Cambiar el estado de un pedido existente (solo admin)"""
     try:
         estados_validos = ["pendiente", "en_preparacion", "enviado", "entregado", "cancelado"]
-        if cambio.nuevo_estado not in estados_validos:
-            raise HTTPException(status_code=400, detail=f"Estado inválido")
 
+        if cambio.nuevo_estado not in estados_validos:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Estado inválido. Debe ser uno de: {', '.join(estados_validos)}"
+            )
+
+        # Buscar el pedido en memoria y actualizar su estado
         for pedido in pedidos_en_memoria:
             if pedido.get("id") == pedido_id:
                 pedido["estado"] = cambio.nuevo_estado
-                logger.info(f"✅ Pedido #{pedido_id} → '{cambio.nuevo_estado}'")
-                return {"mensaje": "Estado actualizado", "pedido_id": pedido_id, "nuevo_estado": cambio.nuevo_estado}
+                logger.info(f"✅ Pedido #{pedido_id} actualizado a '{cambio.nuevo_estado}' por {admin}")
+                return {
+                    "mensaje": "Estado actualizado exitosamente",
+                    "pedido_id": pedido_id,
+                    "nuevo_estado": cambio.nuevo_estado
+                }
 
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
+
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Error: {e}")
-        raise HTTPException(status_code=500, detail="Error al actualizar")
+        logger.error(f"❌ Error actualizando pedido: {e}")
+        raise HTTPException(status_code=500, detail="Error al actualizar el pedido")
 
 
 @app.get("/api/admin/pedidos")
 def obtener_pedidos_admin(admin: str = Depends(verificar_admin)):
+    """Obtener todos los pedidos (endpoint protegido para admin)"""
     return obtener_pedidos()
+
+
+@app.put("/api/admin/pedidos/{pedido_id}/precio")
+def cambiar_precio_pedido(
+        pedido_id: int,
+        cambio: CambioPrecio,
+        admin: str = Depends(verificar_admin)
+):
+    """Cambiar el precio total de un pedido (solo admin) - para ajustar por peso"""
+    try:
+        # Buscar el pedido en memoria y actualizar su precio
+        for pedido in pedidos_en_memoria:
+            if pedido.get("id") == pedido_id:
+                precio_anterior = pedido.get("total", 0)
+                pedido["total"] = cambio.nuevo_total
+                logger.info(
+                    f"✅ Pedido #{pedido_id} precio actualizado: {precio_anterior:.2f}€ → {cambio.nuevo_total:.2f}€ por {admin}")
+                return {
+                    "mensaje": "Precio actualizado exitosamente",
+                    "pedido_id": pedido_id,
+                    "precio_anterior": precio_anterior,
+                    "nuevo_total": cambio.nuevo_total
+                }
+
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"❌ Error actualizando precio del pedido: {e}")
+        raise HTTPException(status_code=500, detail="Error al actualizar el precio")
 
 
 @app.get("/api/admin/estadisticas")
 def obtener_estadisticas(admin: str = Depends(verificar_admin)):
+    """Obtener estadísticas generales de los pedidos"""
     try:
-        total_pedidos = len(pedidos_en_memoria)
-        total_ingresos = sum(p.get("total", 0) for p in pedidos_en_memoria)
+        pedidos = pedidos_en_memoria
+        total_pedidos = len(pedidos)
+        total_ingresos = sum(p.get("total", 0) for p in pedidos)
+
+        # Contar pedidos por estado
         estados = {}
-        for pedido in pedidos_en_memoria:
+        for pedido in pedidos:
             estado = pedido.get("estado", "pendiente")
             estados[estado] = estados.get(estado, 0) + 1
 
@@ -426,8 +555,13 @@ def obtener_estadisticas(admin: str = Depends(verificar_admin)):
             "pedido_promedio": round(total_ingresos / total_pedidos, 2) if total_pedidos > 0 else 0
         }
     except Exception as e:
-        logger.error(f"❌ Error: {e}")
-        return {"total_pedidos": 0, "total_ingresos": 0, "pedidos_por_estado": {}, "pedido_promedio": 0}
+        logger.error(f"❌ Error obteniendo estadísticas: {e}")
+        return {
+            "total_pedidos": 0,
+            "total_ingresos": 0,
+            "pedidos_por_estado": {},
+            "pedido_promedio": 0
+        }
 
 
 handler = app
