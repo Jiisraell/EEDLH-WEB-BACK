@@ -196,6 +196,12 @@ class ItemPedido(BaseModel):
             raise ValueError('La cantidad máxima es 1000')
         return v
 
+    @validator('precio')
+    def validar_precio(cls, v):
+        if v <= 0:
+            raise ValueError('El precio debe ser mayor a 0')
+        return v
+
 
 class Pedido(BaseModel):
     id: Optional[int] = None
@@ -252,12 +258,6 @@ class Pedido(BaseModel):
             raise ValueError('El total debe ser mayor a 0')
         if v > 10000:
             raise ValueError('El total máximo es 10000€')
-        return v
-
-    @validator('precio')
-    def validar_precio(cls, v):
-        if v <= 0:
-            raise ValueError('El precio debe ser mayor a 0')
         return v
 
 
