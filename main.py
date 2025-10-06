@@ -16,6 +16,9 @@ from datetime import timedelta
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi import Depends, status
 import secrets
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
 
 
 # Cargar variables de entorno desde .env
@@ -43,14 +46,10 @@ print(f"DEBUG: Password esperado: '{ADMIN_PASSWORD}'")
 
 def verificar_admin(credentials: HTTPBasicCredentials = Depends(security)):
     """Verificar credenciales de admin"""
-    print(f"DEBUG: Username recibido: '{credentials.username}'")
-    print(f"DEBUG: Password recibido: '{credentials.password}'")
 
     correct_username = secrets.compare_digest(credentials.username, ADMIN_USERNAME)
     correct_password = secrets.compare_digest(credentials.password, ADMIN_PASSWORD)
 
-    print(f"DEBUG: Username coincide: {correct_username}")
-    print(f"DEBUG: Password coincide: {correct_password}")
 
     if not (correct_username and correct_password):
         raise HTTPException(
@@ -62,6 +61,14 @@ def verificar_admin(credentials: HTTPBasicCredentials = Depends(security)):
 
 # Crear la aplicación
 app = FastAPI(title="El Encanto de la Huerta API")
+
+# Montar archivos estáticos
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@app.get("/admin")
+async def admin_panel():
+    return FileResponse("static/admin.html")
+
 
 # Configurar Resend con manejo de errores
 resend_api_key = os.environ.get("RESEND_API_KEY")
