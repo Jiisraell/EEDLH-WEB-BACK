@@ -25,8 +25,7 @@ from fastapi.responses import FileResponse
 load_dotenv()
 
 load_dotenv()
-print(f"DEBUG: ADMIN_USERNAME={os.environ.get('ADMIN_USERNAME')}")
-print(f"DEBUG: ADMIN_PASSWORD={os.environ.get('ADMIN_PASSWORD')}")
+
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -40,8 +39,6 @@ ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
 SECRET_KEY = os.environ.get("SECRET_KEY", "clave-super-secreta-cambiar-en-produccion")
 
-print(f"DEBUG: Username esperado: '{ADMIN_USERNAME}'")
-print(f"DEBUG: Password esperado: '{ADMIN_PASSWORD}'")
 
 
 def verificar_admin(credentials: HTTPBasicCredentials = Depends(security)):
@@ -720,17 +717,21 @@ def admin_login(credentials: HTTPBasicCredentials = Depends(security)):
         raise e
 
 
+# Agregar este modelo antes del endpoint
+class CambioEstado(BaseModel):
+    nuevo_estado: str
+
 @app.put("/api/admin/pedidos/{pedido_id}/estado")
 def cambiar_estado_pedido(
         pedido_id: int,
-        nuevo_estado: str,
+        cambio: CambioEstado,  # ✅ Ahora usa el modelo
         admin: str = Depends(verificar_admin)
 ):
     """Cambiar estado de un pedido (solo admin)"""
     try:
         estados_validos = ["pendiente", "en_preparacion", "enviado", "entregado", "cancelado"]
 
-        if nuevo_estado not in estados_validos:
+        if cambio.nuevo_estado not in estados_validos:
             raise HTTPException(
                 status_code=400,
                 detail=f"Estado inválido. Debe ser uno de: {', '.join(estados_validos)}"
@@ -740,27 +741,39 @@ def cambiar_estado_pedido(
             try:
                 result = pedidos_collection.update_one(
                     {"id": pedido_id},
-                    {"$set": {"estado": nuevo_estado}}
+                    {"$set": {"estado": cambio.nuevo_estado}}
                 )
                 if result.modified_count == 0:
                     raise HTTPException(status_code=404, detail="Pedido no encontrado")
-                logger.info(f"✅ Pedido #{pedido_id} actualizado a '{nuevo_estado}' por {admin}")
+                logger.info(f"✅ Pedido #{pedido_id} actualizado a '{cambio.nuevo_estado}' por {admin}")
             except Exception as e:
                 # Buscar en memoria
                 for pedido in pedidos_en_memoria:
                     if pedido.get("id") == pedido_id:
-                        pedido["estado"] = nuevo_estado
+                        pedido["estado"] = cambio.nuevo_estado
                         logger.info(f"✅ Pedido #{pedido_id} actualizado en memoria")
-                        return {"mensaje": "Estado actualizado", "pedido_id": pedido_id, "nuevo_estado": nuevo_estado}
+                        return {"mensaje": "Estado actualizado", "pedido_id": pedido_id, "nuevo_estado": cambio.nuevo_estado}
                 raise HTTPException(status_code=404, detail="Pedido no encontrado")
         else:
             # Buscar en memoria
             for pedido in pedidos_en_memoria:
                 if pedido.get("id") == pedido_id:
-                    pedido["estado"] = nuevo_estado
+                    pedido["estado"] = cambio.nuevo_estado
                     logger.info(f"✅ Pedido #{pedido_id} actualizado en memoria")
-                    return {"mensaje": "Estado actualizado", "pedido_id": pedido_id, "nuevo_estado": nuevo_estado}
+                    return {"mensaje": "Estado actualizado", "pedido_id": pedido_id, "nuevo_estado": cambio.nuevo_estado}
             raise HTTPException(status_code=404, detail="Pedido no encontrado")
+
+        return {
+            "mensaje": "Estado actualizado exitosamente",
+            "pedido_id": pedido_id,
+            "nuevo_estado": cambio.nuevo_estado
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error actualizando pedido: {e}")
+        raise HTTPException(status_code=500, detail="Error al actualizar el pedido")
 
         return {
             "mensaje": "Estado actualizado exitosamente",
