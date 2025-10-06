@@ -627,17 +627,40 @@ def crear_pedido(pedido: Pedido):
         logger.error(f"❌ Error creando pedido: {e}")
         raise HTTPException(status_code=500, detail="Error al crear el pedido.")
 
+# Función auxiliar para convertir ObjectId a string
+def convertir_objectid(pedidos):
+    """Convierte ObjectId a string en todos los pedidos"""
+    pedidos_limpios = []
+    for pedido in pedidos:
+        pedido_limpio = {}
+        for key, value in pedido.items():
+            if key == "_id":
+                continue  # Omitir el _id
+            elif isinstance(value, ObjectId):
+                pedido_limpio[key] = str(value)
+            elif isinstance(value, list):
+                pedido_limpio[key] = [
+                    {k: str(v) if isinstance(v, ObjectId) else v for k, v in item.items()}
+                    if isinstance(item, dict) else item
+                    for item in value
+                ]
+            else:
+                pedido_limpio[key] = value
+        pedidos_limpios.append(pedido_limpio)
+    return pedidos_limpios
+
 # Endpoint para obtener todos los pedidos
 @app.get("/api/pedidos")
 def obtener_pedidos():
     try:
         if usar_mongodb:
             try:
-                pedidos = list(pedidos_collection.find({}, {"_id": 0}))
-                logger.info(f"✅ {len(pedidos)} pedidos obtenidos de MongoDB")
-                return pedidos
-            except:
-                logger.warning("⚠️ MongoDB no disponible, mostrando pedidos de memoria")
+                pedidos = list(pedidos_collection.find())
+                pedidos_limpios = convertir_objectid(pedidos)
+                logger.info(f"✅ {len(pedidos_limpios)} pedidos obtenidos de MongoDB")
+                return pedidos_limpios
+            except Exception as e:
+                logger.warning(f"⚠️ MongoDB no disponible: {e}. Mostrando pedidos de memoria")
                 return pedidos_en_memoria
         else:
             return pedidos_en_memoria
